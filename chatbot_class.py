@@ -352,7 +352,7 @@ class Chatbot:
         chat_history_str = self._format_chat_history(messages)
 
         # Define the RAG prompt template (moved here for clarity)
-        RAG_PROMPT_TEMPLATE = """SYSTEM: You are a helpful assistant. Use the following context pieces retrieved from a knowledge base to answer the user's question. If you don't know the answer based on the context, just say that you don't know. Keep the answer concise and relevant to the question. For the context you receive and reference, cite the source by printing the full file path at the end of your response.
+        RAG_PROMPT_TEMPLATE = """SYSTEM: You are a helpful assistant. Use the following context pieces retrieved from a knowledge base to answer the user's question. If you don't know the answer based on the context, just say that you don't know. Keep the answer concise and relevant to the question. For the context you receive and reference, cite the source by printing the full file path at the end of your response. Write with markdown. For the cited sources, make them hyperlinks to the file paths.
 
 CONTEXT:
 {context}
