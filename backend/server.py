@@ -1,7 +1,11 @@
 from flask import Flask, request, jsonify
 
+from flask_cors import CORS, cross_origin
+
+
 # Create a Flask instance
 app = Flask(__name__)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 # Define a route
 @app.route('/', methods=['GET'])
@@ -35,10 +39,7 @@ def add_hash():
         return jsonify({'result': '##' + text})
     else:
         # Read and return the contents of your JSON file
-        
         return jsonify("hello")
-    
-
 
     
 # website prompts flask server, flask server prompts model for data (lane change idk wtf that is),

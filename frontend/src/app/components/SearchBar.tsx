@@ -1,3 +1,5 @@
+"use client"
+
 import { useState } from "react";
 
 const SearchBar: React.FC<{ setMarkdownText: (text: string) => void }> = ({
@@ -12,12 +14,12 @@ const SearchBar: React.FC<{ setMarkdownText: (text: string) => void }> = ({
     setError(null);
 
     try {
-        const response = await fetch("/api/search", {
+        const response = await fetch("http://127.0.0.1:5000/api/add-hash", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({ query: searchQuery }),
+            body: JSON.stringify({ text: searchQuery }),
         });
 
         if (!response.ok) {
@@ -25,7 +27,8 @@ const SearchBar: React.FC<{ setMarkdownText: (text: string) => void }> = ({
         }
 
         const data = await response.json();
-        setMarkdownText(data.markdown || "");
+        console.log(data);
+        setMarkdownText(data.result || "");
     } catch (error) {
         setError(error instanceof Error ? error.message : "An error occurred");
     } finally {
