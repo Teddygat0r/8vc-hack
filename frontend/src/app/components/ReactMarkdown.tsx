@@ -9,7 +9,7 @@ type Props = {
 const MarkdownRenderer: React.FC<Props> = ({ content }) => {
   return (
     <>
-      <div className="prose-invert">
+      <div className="prose">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
       </div>
     </>
