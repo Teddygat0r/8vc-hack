@@ -55,7 +55,7 @@ export default function Home() {
           <SearchBar setMarkdownText={setMarkdownContent} />
           {markdownContent && (
             <div className="w-full max-w-3xl mt-8">
-              <MarkdownRenderer markdown={markdownContent} />
+              <MarkdownRenderer content={markdownContent} />
             </div>
           )}
         </div>

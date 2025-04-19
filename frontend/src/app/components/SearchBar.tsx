@@ -10,7 +10,6 @@ const SearchBar: React.FC<SearchBarProps> = ({ setMarkdownText }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasSubmitted, setHasSubmitted] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-focus on mount
@@ -22,7 +21,6 @@ const SearchBar: React.FC<SearchBarProps> = ({ setMarkdownText }) => {
     if (!searchQuery.trim()) return;
     setIsLoading(true);
     setError(null);
-    setHasSubmitted(true);
     try {
       const res = await fetch("http://127.0.0.1:5000/api/process-prompt", {
         method: "POST",
@@ -42,6 +40,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ setMarkdownText }) => {
   // Auto-grow textarea
   const adjustTextareaHeight = (el: HTMLTextAreaElement) => {
     el.style.height = "auto";
+    el.style.height = Math.max(40, el.scrollHeight) + "px";
     el.style.height = `${el.scrollHeight}px`;
   };
 
@@ -50,12 +49,15 @@ const SearchBar: React.FC<SearchBarProps> = ({ setMarkdownText }) => {
       {/* Search box */}
       <div className="w-full bg-white bg-opacity-85 rounded-full shadow-lg p-4">
         {isLoading && (
-          <div className="text-center mb-2 text-gray-400 flex justify-center items-center gap-1">
-            <span className="text-sm">Loading</span>
-            <span className="animate-bounce-dot">.</span>
-            <span className="animate-bounce-dot-delay-1">.</span>
-            <span className="animate-bounce-dot-delay-2">.</span>
-          </div>
+            <>
+            <div className="fixed inset-0 bg-black opacity-30"></div>
+            <div className="fixed inset-0 flex items-center text-2xl justify-center text-center text-black-400 gap-1">
+              <span className="text-2xl">Loading</span>
+              <span className="animate-bounce-dot">.</span>
+              <span className="animate-bounce-dot-delay-1">.</span>
+              <span className="animate-bounce-dot-delay-2">.</span>
+            </div>
+            </>
         )}
         <textarea
           ref={textareaRef}
@@ -83,30 +85,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ setMarkdownText }) => {
         )}
       </div>
 
-      {/* Response panel */}
-      {hasSubmitted && (
-        <div className="w-full mt-8 bg-white bg-opacity-85 rounded-lg shadow-lg p-6 text-black">
-          <div className="text-sm text-gray-400 mb-2">Your prompt:</div>
-          <div className="bg-white p-3 rounded-md mb-4">{searchQuery}</div>
-
-          <div className="text-sm text-gray-400 mb-2">Response:</div>
-          <div className="bg-white p-3 rounded-md min-h-[8rem]">
-            {isLoading ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="animate-pulse text-gray-400">
-                  Processing your request...
-                </div>
-              </div>
-            ) : (
-              <div className="prose prose-invert max-w-none">
-                <p className="text-gray-400 italic">
-                  Response will appear here…
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      
     </div>
   );
 };
