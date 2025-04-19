@@ -38,6 +38,9 @@ const SearchBar: React.FC<{ setMarkdownText: (text: string) => void }> = ({
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-gray-900 p-3 shadow-md mx-[20%] text-white">
+      {isLoading && (
+        <div className="text-center mb-2 text-gray-400">Loading...</div>
+      )}
       <textarea
         placeholder="Type your message..."
         className="h-[2.5rem] max-h-[6.75rem] w-full bg-gray-800 text-white p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-auto m-0"
