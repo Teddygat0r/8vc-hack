@@ -1,65 +1,112 @@
-"use client"
+"use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
-const SearchBar: React.FC<{ setMarkdownText: (text: string) => void }> = ({
-  setMarkdownText,
-}) => {
+interface SearchBarProps {
+  setMarkdownText: (text: string) => void;
+}
+
+const SearchBar: React.FC<SearchBarProps> = ({ setMarkdownText }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-focus on mount
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
 
   const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
     setIsLoading(true);
     setError(null);
-
+    setHasSubmitted(true);
     try {
-        const response = await fetch("http://127.0.0.1:5000/api/process-prompt", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ prompt: searchQuery }),
-        });
-
-        if (!response.ok) {
-            throw new Error("Network response was not ok");
-        }
-
-        const data = await response.json();
-        console.log(data);
-        setMarkdownText(data.response || "");
-    } catch (error) {
-        setError(error instanceof Error ? error.message : "An error occurred");
+      const res = await fetch("http://127.0.0.1:5000/api/process-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: searchQuery }),
+      });
+      if (!res.ok) throw new Error("Network response was not ok");
+      const data = await res.json();
+      setMarkdownText(data.response || "");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
+  // Auto-grow textarea
+  const adjustTextareaHeight = (el: HTMLTextAreaElement) => {
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-gray-900 p-3 shadow-md mx-[20%] text-white">
-      {isLoading && (
-        <div className="text-center mb-2 text-gray-400">Loading...</div>
+    <div className="w-full max-w-3xl">
+      {/* Search box */}
+      <div className="w-full bg-white bg-opacity-85 rounded-full shadow-lg p-4">
+        {isLoading && (
+          <div className="text-center mb-2 text-gray-400 flex justify-center items-center gap-1">
+            <span className="text-sm">Loading</span>
+            <span className="animate-bounce-dot">.</span>
+            <span className="animate-bounce-dot-delay-1">.</span>
+            <span className="animate-bounce-dot-delay-2">.</span>
+          </div>
+        )}
+        <textarea
+          ref={textareaRef}
+          placeholder="Ask me anything..."
+          className="w-full bg-white text-black p-3 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden"
+          value={searchQuery}
+          onChange={e => {
+            setSearchQuery(e.target.value);
+            adjustTextareaHeight(e.target);
+          }}
+          onKeyDown={e => {
+            if (e.key === "Enter" && !e.shiftKey && !isLoading) {
+              e.preventDefault();
+              handleSearch();
+            }
+          }}
+          disabled={isLoading}
+          rows={1}
+          style={{ minHeight: "40px" }}
+        />
+        {error && (
+          <div className="mt-2 text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+      </div>
+
+      {/* Response panel */}
+      {hasSubmitted && (
+        <div className="w-full mt-8 bg-white bg-opacity-85 rounded-lg shadow-lg p-6 text-black">
+          <div className="text-sm text-gray-400 mb-2">Your prompt:</div>
+          <div className="bg-white p-3 rounded-md mb-4">{searchQuery}</div>
+
+          <div className="text-sm text-gray-400 mb-2">Response:</div>
+          <div className="bg-white p-3 rounded-md min-h-[8rem]">
+            {isLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="animate-pulse text-gray-400">
+                  Processing your request...
+                </div>
+              </div>
+            ) : (
+              <div className="prose prose-invert max-w-none">
+                <p className="text-gray-400 italic">
+                  Response will appear here…
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       )}
-      <textarea
-        placeholder="Type your message..."
-        className="h-[2.5rem] max-h-[6.75rem] w-full bg-gray-800 text-white p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-auto m-0"
-        value={searchQuery}
-        onChange={(e) => {
-          setSearchQuery(e.target.value);
-          const textarea = e.target;
-          textarea.style.height = "auto";
-          textarea.style.height = Math.max(0, textarea.scrollHeight - 40) + "px";
-          textarea.style.height = `${Math.min(textarea.scrollHeight, 108)}px`;
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey && !isLoading) {
-            e.preventDefault();
-            handleSearch();
-          }
-        }}
-        disabled={isLoading}
-      />
     </div>
   );
 };
