@@ -11,6 +11,8 @@ from langchain_community.document_loaders import ( # Grouped imports
     PyMuPDFLoader,
     UnstructuredMarkdownLoader,
     UnstructuredHTMLLoader,
+    UnstructuredWordDocumentLoader,
+    UnstructuredFileLoader
 )
 from langchain_text_splitters import CharacterTextSplitter
 from langchain_chroma import Chroma
@@ -223,8 +225,12 @@ class Chatbot:
                         continue
                     file_path = os.path.join(root, file)
                     _, file_ext = os.path.splitext(file_path)
-                    if file_ext.lower() in supported_extensions:
-                        yield file_path # Use yield for memory efficiency
+                    if os.path.isdir(file_path):
+                        # If the file path is a directory, recurse into it
+                        yield from self._recurse_filepaths(file_path)
+                        found_files = True
+                    else:
+                        yield file_path  # Yield the file path regardless of extension
                         found_files = True
                 except Exception as e:
                     logger.warning(f"Could not process file entry '{file}' in '{root}': {e}")
@@ -244,7 +250,7 @@ class Chatbot:
             file_ext_lower = file_ext.lower()
             loader = None
 
-            supported_extensions = {".txt", ".pdf", ".md", ".html"}
+            supported_extensions = {".txt", ".pdf", ".md", ".html", ".docx"}
             if file_ext_lower not in supported_extensions:
                  logger.warning(f"Unsupported file type encountered (should have been filtered): {file_path}")
                  return []
@@ -260,6 +266,13 @@ class Chatbot:
                 loader = UnstructuredMarkdownLoader(file_path, mode="single")
             elif file_ext_lower == ".html":
                 loader = UnstructuredHTMLLoader(file_path)
+            elif file_ext_lower == ".docx":
+                loader = UnstructuredWordDocumentLoader(file_path)
+            elif os.path.getsize(file_path) > 500 * 1024 * 1024:
+                logger.warning(f"File {file_path} Too Big")
+                return []
+            else:
+                loader = UnstructuredFileLoader(file_path)
             # No else needed
 
             loaded_docs = loader.load()
@@ -339,7 +352,7 @@ class Chatbot:
         chat_history_str = self._format_chat_history(messages)
 
         # Define the RAG prompt template (moved here for clarity)
-        RAG_PROMPT_TEMPLATE = """SYSTEM: You are a helpful assistant. Use the following context pieces retrieved from a knowledge base to answer the user's question. If you don't know the answer based on the context, just say that you don't know. Keep the answer concise and relevant to the question.
+        RAG_PROMPT_TEMPLATE = """SYSTEM: You are a helpful assistant. Use the following context pieces retrieved from a knowledge base to answer the user's question. If you don't know the answer based on the context, just say that you don't know. Keep the answer concise and relevant to the question. For the context you receive and reference, cite the source by printing the full file path at the end of your response.
 
 CONTEXT:
 {context}
