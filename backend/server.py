@@ -1,6 +1,8 @@
 from flask import Flask, Blueprint, request, jsonify, current_app
 from flask_cors import CORS, cross_origin
 
+import uuid
+
 # Create a Flask instance
 api = Blueprint('api', __name__)
 CORS(api, resources={r"/*": {"origins": "*"}})
@@ -22,7 +24,9 @@ def process_prompt():
         prompt = data.get('prompt')
 
         model = current_app.config['LLM']
-        response = model.chat(prompt)
+        current_thread_id = str(uuid.uuid4())
+        response = model.chat(prompt, current_thread_id)
+        print(response)
 
         return jsonify({'response' : response})
     

@@ -93,48 +93,61 @@ class Chatbot:
 
     def _load_and_process_data(self):
         """
-        Finds all supported files in the base directory, loads them using the
-        appropriate loaders, splits the combined content, creates the ChromaDB store,
-        and initializes the retriever.
+        Finds all supported files in the base directory, loads them with metadata,
+        splits the combined content, creates the ChromaDB store, and initializes the retriever.
         """
         if not os.path.isdir(self.base_directory):
             raise FileNotFoundError(f"Base directory not found or is not a directory: {self.base_directory}")
 
-        all_raw_documents: List[Document] = [] # Initialize list to hold all loaded docs
+        all_raw_documents: List[Document] = []
+        logger.info(f"Starting document loading process from base directory: {self.base_directory}")
 
-        # Iterate through all supported files found by the recursive search
+        file_count = 0
         for file_path in self._recurse_filepaths(self.base_directory):
-            # Load documents from the current file
+            file_count += 1
             documents_from_file = self._document_loader(file_path)
-            # Add the loaded documents to the main list
             all_raw_documents.extend(documents_from_file)
 
-        # Check if any documents were loaded at all
+        logger.info(f"Finished scanning directory. Processed {file_count} potential files.")
+
+        # Check AFTER attempting to load all files
         if not all_raw_documents:
-            raise ValueError(f"No processable documents found in directory: {self.base_directory}. Check file types and content.")
+            raise ValueError(f"No processable documents found or loaded in directory: {self.base_directory}. Check file types, content, and permissions.")
+        # Log count only if documents were found
+        logger.info(f"Total raw documents loaded from all files: {len(all_raw_documents)}") # FIX 1 applied implicitly by correct flow
 
-        logger.info(f"Total documents loaded from all files: {len(all_raw_documents)}")
-
-        # Proceed with splitting the combined documents
         logger.info("Splitting all loaded documents...")
-        text_splitter = CharacterTextSplitter(chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap)
-        split_documents = text_splitter.split_documents(all_raw_documents) # Split the combined list
+        text_splitter = CharacterTextSplitter(
+            chunk_size=self.chunk_size,
+            chunk_overlap=self.chunk_overlap,
+            separator="\n\n",
+            is_separator_regex=False,
+        )
+        try:
+            split_documents = text_splitter.split_documents(all_raw_documents)
+        except Exception as e:
+             logger.error(f"Error during document splitting: {e}", exc_info=True)
+             raise ValueError("Failed to split documents.") from e
 
         if not split_documents:
             raise ValueError("Splitting documents resulted in zero chunks. Check chunk size/overlap and document content.")
 
         logger.info(f"Split into {len(split_documents)} document chunks.")
 
-        # Create ChromaDB vector store from the split chunks
         logger.info("Creating ChromaDB vector store (in-memory)...")
         try:
-            self.db = Chroma.from_documents(split_documents, self.embeddings)
+            if not hasattr(self, 'embeddings') or self.embeddings is None:
+                 raise ValueError("Embeddings model not initialized.")
+
+            self.db = Chroma.from_documents(
+                 documents=split_documents,
+                 embedding=self.embeddings
+            )
             logger.info("ChromaDB vector store created successfully.")
         except Exception as e:
             logger.error(f"Failed to create ChromaDB store: {e}", exc_info=True)
-            raise # Re-raise the exception after logging
+            raise ValueError("Failed to create vector store.") from e
 
-        # Create the retriever interface
         logger.info(f"Creating retriever (k={self.search_k})...")
         self.retriever = self.db.as_retriever(
             search_type="similarity",
@@ -143,25 +156,80 @@ class Chatbot:
         logger.info("Retriever created.")
     
     def add_data(self, directory):
-        file_paths = self._recurse_filepaths(directory)
-        
-        for file_path in file_paths:
-            raw_documents = self._document_loader(file_path)
-            text_splitter = CharacterTextSplitter(chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap)
-            documents = text_splitter.split_documents(raw_documents)
-
-            self.db.add_documents(documents=documents)
-    
-    def _recurse_filepaths(self, directory):
+        """
+        Adds documents from a specified directory to the existing vector store,
+        including source metadata.
+        """
+        logger.info(f"Adding data from directory: {directory}")
+        if not hasattr(self, 'db') or self.db is None:
+            logger.error("Cannot add data: Database not initialized.")
+            return
         if not os.path.isdir(directory):
-            raise FileNotFoundError(f"The directory {directory} does not exist or is not a directory.")
+             logger.error(f"Cannot add data: Provided path is not a directory: {directory}")
+             return
 
-        file_paths = []
+        added_chunks_count = 0
+        for file_path in self._recurse_filepaths(directory):
+            # _document_loader now adds metadata
+            raw_documents = self._document_loader(file_path)
+
+            # FIX 3: Check if documents were actually loaded before splitting/adding
+            if not raw_documents:
+                continue # Skip this file if loading failed or it was empty
+
+            text_splitter = CharacterTextSplitter(
+                chunk_size=self.chunk_size,
+                chunk_overlap=self.chunk_overlap,
+                separator="\n\n",
+                is_separator_regex=False,
+            )
+            documents_to_add = text_splitter.split_documents(raw_documents)
+
+            if documents_to_add:
+                try:
+                    # Assuming CharacterTextSplitter preserves metadata
+                    self.db.add_documents(documents=documents_to_add)
+                    added_chunks_count += len(documents_to_add)
+                    logger.info(f"Added {len(documents_to_add)} chunks from {os.path.basename(file_path)} to the vector store.")
+                except Exception as e:
+                     logger.error(f"Failed to add documents from {file_path} to vector store: {e}", exc_info=False)
+
+        if added_chunks_count > 0:
+            logger.info(f"Finished adding data. Total new chunks added: {added_chunks_count}")
+        else:
+            logger.warning(f"No new documents were added from directory: {directory}")
+    
+    def _recurse_filepaths(self, directory: str) -> Iterator[str]:
+        """
+        Recursively finds all files with supported extensions within a directory using yield.
+
+        Args:
+            directory (str): The base directory to search within.
+
+        Yields:
+            str: The full path to each supported file found.
+        """
+        supported_extensions = {".txt", ".pdf", ".md", ".html"}
+        logger.info(f"Scanning directory '{directory}' for supported files ({', '.join(supported_extensions)})...")
+        found_files = False
+        if not os.path.isdir(directory):
+             raise FileNotFoundError(f"The directory {directory} does not exist or is not a directory.")
+
         for root, _, files in os.walk(directory):
-            for name in files:
-                full_path = os.path.abspath(os.path.join(root, name))
-                file_paths.append(full_path)
-        return file_paths
+            for file in files:
+                try:
+                    # Skip hidden files/folders
+                    if file.startswith('.'):
+                        continue
+                    file_path = os.path.join(root, file)
+                    _, file_ext = os.path.splitext(file_path)
+                    if file_ext.lower() in supported_extensions:
+                        yield file_path # Use yield for memory efficiency
+                        found_files = True
+                except Exception as e:
+                    logger.warning(f"Could not process file entry '{file}' in '{root}': {e}")
+        if not found_files:
+             logger.warning(f"No files with supported extensions found in directory: {directory}")
 
     # based on the type of file choose what Loader to use, and then return the raw_documents:
     # loader = TextLoader(self.data_file_path)
@@ -169,46 +237,79 @@ class Chatbot:
     def _document_loader(self, file_path: str) -> List[Document]:
         """
         Loads documents from a single file using the appropriate Langchain loader
-        based on the file extension.
-
-        Args:
-            file_path (str): The full path to the file to load.
-
-        Returns:
-            List[Document]: A list of Document objects loaded from the file,
-                           or an empty list if loading fails or the type is unsupported.
+        and adds the ABSOLUTE filepath to metadata['source'].
         """
         try:
             _, file_ext = os.path.splitext(file_path)
             file_ext_lower = file_ext.lower()
             loader = None
 
+            supported_extensions = {".txt", ".pdf", ".md", ".html"}
+            if file_ext_lower not in supported_extensions:
+                 logger.warning(f"Unsupported file type encountered (should have been filtered): {file_path}")
+                 return []
+
+            logger.info(f"Attempting to load document: {file_path}")
+
+            # Determine loader
             if file_ext_lower == ".txt":
-                loader = TextLoader(file_path)
+                loader = TextLoader(file_path, encoding='utf-8')
             elif file_ext_lower == ".pdf":
                 loader = PyMuPDFLoader(file_path)
             elif file_ext_lower == ".md":
-                loader = UnstructuredMarkdownLoader(file_path, mode="single") # Use single mode for simplicity
+                loader = UnstructuredMarkdownLoader(file_path, mode="single")
             elif file_ext_lower == ".html":
                 loader = UnstructuredHTMLLoader(file_path)
-            else:
-                logger.warning(f"Unsupported file type skipped: {file_path}")
-                return []
+            # No else needed
 
-            # Load the documents
-            logger.info(f"Loading document: {file_path} using {type(loader).__name__}")
             loaded_docs = loader.load()
-            logger.info(f"Successfully loaded {len(loaded_docs)} document(s) from {file_path}")
+
+            if not loaded_docs:
+                 logger.warning(f"No documents extracted from file: {file_path}")
+                 return []
+
+            # Calculate relative path for logging purposes (optional)
+            try:
+                log_relative_path = os.path.relpath(file_path, self.base_directory)
+            except ValueError:
+                log_relative_path = os.path.basename(file_path)
+
+            # Get the absolute path for storage
+            absolute_file_path = os.path.abspath(file_path) # <-- Get absolute path
+
+            for doc in loaded_docs:
+                if not hasattr(doc, 'metadata') or doc.metadata is None:
+                    doc.metadata = {}
+                # --- Store the ABSOLUTE path in metadata ---
+                doc.metadata["source"] = absolute_file_path
+                # --- End of Fix ---
+
+            # Log uses the absolute path now for clarity, or keep log_relative_path if preferred
+            logger.info(f"Successfully loaded {len(loaded_docs)} doc(s) from {absolute_file_path}")
             return loaded_docs
 
         except Exception as e:
-            logger.error(f"Failed to load document {file_path}: {e}", exc_info=True) # Log traceback
-            return [] # Return empty list on error for this file
+            logger.error(f"Failed to load document {file_path}: {e}", exc_info=False)
+            return []
 
 
-    def _format_docs(self, docs: List[Any]) -> str:
-        """Helper function to format retrieved documents into a string."""
-        return "\n\n".join(doc.page_content for doc in docs)
+    def _format_docs(self, docs: List[Document]) -> str:
+        """
+        Helper function to format retrieved documents into a string,
+        including the source metadata.
+        """
+        if not docs:
+            return "No relevant context found."
+
+        formatted_docs = []
+        for i, doc in enumerate(docs):
+            # Retrieve source from metadata, providing a default if missing
+            source = doc.metadata.get("source", "Unknown Source")
+            content = doc.page_content
+            # Format the string to include both source and content
+            formatted_docs.append(f"--- Context Piece {i+1} (Source: {source}) ---\n{content}")
+
+        return "\n\n".join(formatted_docs)
 
     def _format_chat_history(self, messages: Sequence[BaseMessage]) -> str:
         """Helper function to format chat history for the prompt."""
