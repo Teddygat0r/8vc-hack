@@ -167,7 +167,7 @@ if __name__ == "__main__":
             # Invoke the app. LangGraph handles state loading/saving via checkpointer
             try:
                 # Input to the graph is the current state, with the new user message added
-                response = app.invoke({"messages": [HumanMessage(content=user_input)]}, config)
+                response = app.invoke({"messages": [HumanMessage(content=user_input)]}, config) # REPLACE THIS WITH FLASK SERVER INPUT *******
 
                 # The response contains the full state; the last message is the AI's reply
                 ai_response = response['messages'][-1]
