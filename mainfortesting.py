@@ -4,13 +4,13 @@ from chatbot_class import Chatbot # Import the class
 import uuid # To generate unique thread IDs easily
 
 # --- Configuration ---
-DATA_FILE = './data.txt' # Make sure data.txt is in the same directory
+DATA_DIR = './alldata'
 
 if __name__ == "__main__":
     print("Creating Chatbot instance...")
     try:
         # Initialize the chatbot with the path to your data file
-        chatbot = Chatbot(data_file_path=DATA_FILE)
+        chatbot = Chatbot(base_directory=DATA_DIR)
     except FileNotFoundError as e:
         print(f"Error initializing chatbot: {e}")
         exit(1)
