@@ -4,7 +4,7 @@ from chatbot_class import Chatbot # Import the class
 import uuid # To generate unique thread IDs easily
 
 # --- Configuration ---
-DATA_DIR = './alldata'
+DATA_DIR = 'C:\\Users\\weakd\\OneDrive\\Documents'
 
 if __name__ == "__main__":
     print("Creating Chatbot instance...")
