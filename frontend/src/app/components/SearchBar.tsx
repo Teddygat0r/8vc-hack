@@ -14,12 +14,12 @@ const SearchBar: React.FC<{ setMarkdownText: (text: string) => void }> = ({
     setError(null);
 
     try {
-        const response = await fetch("http://127.0.0.1:5000/api/add-hash", {
+        const response = await fetch("http://127.0.0.1:5000/api/process-prompt", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({ text: searchQuery }),
+            body: JSON.stringify({ prompt: searchQuery }),
         });
 
         if (!response.ok) {
@@ -28,7 +28,7 @@ const SearchBar: React.FC<{ setMarkdownText: (text: string) => void }> = ({
 
         const data = await response.json();
         console.log(data);
-        setMarkdownText(data.result || "");
+        setMarkdownText(data.response || "");
     } catch (error) {
         setError(error instanceof Error ? error.message : "An error occurred");
     } finally {
